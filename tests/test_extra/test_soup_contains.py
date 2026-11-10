@@ -1,5 +1,7 @@
 """Test contains selectors."""
 from .. import util
+import signal
+import unittest
 import warnings
 import soupsieve as sv
 
@@ -307,3 +309,26 @@ class TestSoupContains(util.TestCase):
             # Verify some things
             self.assertTrue(len(w) == 1)
             self.assertTrue(issubclass(w[-1].category, FutureWarning))
+
+    @unittest.skipUnless(hasattr(signal, 'SIGALRM'), 'requires signal.SIGALRM')
+    def test_contains_bad_value_unclosed(self):
+        """Test contains with an unclosed quoted value fails for syntax error, not timeout error."""
+
+        def timeout_handler(signum, frame):
+            raise TimeoutError
+
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(3)
+
+        passed = False
+        try:
+            with self.assertRaises(sv.SelectorSyntaxError):
+                sv.compile('span:-soup-contains("' + ('x' * 300))
+            with self.assertRaises(sv.SelectorSyntaxError):
+                sv.compile("span:-soup-contains-own('" + ('x' * 300))
+            passed = True
+        except TimeoutError:
+            pass
+        finally:
+            signal.alarm(0)
+        self.assertTrue(passed)
